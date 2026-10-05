@@ -1,0 +1,62 @@
+name: "GestionCompetence-app"
+
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: "mssql-server"
+    user: root
+    environment:
+      ACCEPT_EULA: Y
+      MSSQL_SA_PASSWORD: ${SA_PASSWD}
+    ports:
+      - "1434:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $$MSSQL_SA_PASSWORD -Q 'SELECT 1' -C || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P $$MSSQL_SA_PASSWORD -Q 'SELECT 1' -C"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 25s
+    networks:
+      - app-net
+
+  backend:
+    container_name: "Competence-Api"
+    build:
+      context: ../GestionCompetences
+      dockerfile: Dockerfile
+    ports:
+      - "7281:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__database=Server=mssql,1433;Database=GestionCompetencesDb;User Id=sa;Password=${SA_PASSWD};TrustServerCertificate=True;
+      - Jwt__Issuer=GestionCompetencesAPI
+      - Jwt__Audience=GestionCompetencesClient
+      - Jwt__Key=${Jwt__Key}
+    depends_on:
+      mssql:
+        condition: service_healthy
+    networks:
+      - app-net
+
+  frontend:
+    build:
+      context: ../GestionCompetences.Angular
+      dockerfile: Dockerfile
+    container_name: angular_frontend
+    ports:
+      - "4200:80" 
+    depends_on:
+      - backend
+    networks:
+      - app-net
+
+volumes:
+  sqlserver_data:
+
+networks:
+  app-net:
+    driver: bridge
+    
+    
